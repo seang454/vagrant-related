@@ -1,0 +1,78 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  
+  # ==========================================
+  # 1. THE LOAD BALANCERS (HAProxy + Keepalived)
+  # ==========================================
+  lb_ips = ["192.168.56.9", "192.168.56.15"]
+  
+  (1..2).each do |i|
+    config.vm.define "loadbalancer-#{i}" do |node|
+      node.vm.box = "bento/ubuntu-22.04"
+      node.vm.hostname = "haproxy-#{i}"
+      node.vm.network "private_network", ip: lb_ips[i-1]
+      
+      node.vm.provider "vmware_desktop" do |vmw|
+        vmw.gui = false 
+        # Load balancers are extremely lightweight. 512MB is plenty!
+        vmw.vmx["memsize"]  = "512" 
+        vmw.vmx["numvcpus"] = "1"
+      end
+    end
+  end
+
+  # ==========================================
+  # 2. THE KUBERNETES MASTER NODES
+  # ==========================================
+  # Standard K8s (kubeadm) strictly requires AT LEAST 2 CPUs and 2GB RAM per master node.
+  (1..3).each do |i|
+    config.vm.define "master-#{i}" do |node|
+      node.vm.box = "bento/ubuntu-22.04"
+      node.vm.hostname = "master-#{i}"
+      node.vm.network "private_network", ip: "192.168.56.#{9 + i}"
+      
+      node.vm.provider "vmware_desktop" do |vmw|
+        vmw.gui = false 
+        vmw.vmx["memsize"]  = "2048" # 2GB RAM (Strict minimum for kubeadm)
+        vmw.vmx["numvcpus"] = "2"    # 2 CPUs (Strict minimum for kubeadm)
+      end
+      
+      # Prepare OS for Kubernetes
+      node.vm.provision "shell", inline: <<-SHELL
+        apt-get update && apt-get upgrade -y
+        swapoff -a
+        sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+      SHELL
+    end
+  end
+
+  # ==========================================
+  # 3. THE KUBERNETES WORKER NODES
+  # ==========================================
+  # Workers do not have strict minimums to join the cluster, 
+  # but they need enough resources to run your actual apps.
+  (1..2).each do |i|
+    config.vm.define "worker-#{i}" do |node|
+      node.vm.box = "bento/ubuntu-22.04"
+      node.vm.hostname = "worker-#{i}"
+      # IPs: 192.168.56.20 and 192.168.56.21
+      node.vm.network "private_network", ip: "192.168.56.#{19 + i}"
+      
+      node.vm.provider "vmware_desktop" do |vmw|
+        vmw.gui = false 
+        vmw.vmx["memsize"]  = "1024" # 1GB RAM for apps (Increase if running heavy apps)
+        vmw.vmx["numvcpus"] = "1"    # 1 CPU
+      end
+      
+      # Prepare OS for Kubernetes
+      node.vm.provision "shell", inline: <<-SHELL
+        apt-get update && apt-get upgrade -y
+        swapoff -a
+        sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+      SHELL
+    end
+  end
+  
+end

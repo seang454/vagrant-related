@@ -1,0 +1,1 @@
+{"virtualbox":{"/home/vagrant/data":{"guestpath":"/home/vagrant/data","hostpath":"D:/CSTADPreUniversityTraining/ITP/vargrant-related/ubuntu-machine/data","disabled":false,"__vagrantfile":true},"/vagrant":{"guestpath":"/vagrant","hostpath":"D:/CSTADPreUniversityTraining/ITP/vargrant-related/ubuntu-machine","disabled":false,"__vagrantfile":true}}}
