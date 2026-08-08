@@ -7,8 +7,31 @@ This guide walks you through turning your 5 raw Vagrant Virtual Machines into a 
 - **3 Control Plane Nodes (Masters)**: Running K3s Server
 - **2 Worker Nodes**: Running K3s Agent (IPs: `192.168.56.20`, `192.168.56.21`)
 
-## Prerequisite
-Make sure you have run `vagrant up` with the 5-node Vagrantfile and that all 5 machines are running. You will need to open multiple terminal windows to SSH into the different machines simultaneously.
+## Prerequisites
+
+### 1. VMware Workstation Users (Important!)
+Vagrant does not support VMware out-of-the-box. Before running `vagrant up`, you MUST install the integration tools. 
+
+**Step A: Install the Vagrant VMware Utility (.msi)**
+1. Download the **Vagrant VMware Utility** from HashiCorp: [https://developer.hashicorp.com/vagrant/downloads/vmware](https://developer.hashicorp.com/vagrant/downloads/vmware)
+2. You will get a `.msi` installer file. You MUST double-click this file and install it manually:
+   * **Double-click** the `.msi` file.
+   * Click **Yes** on the Windows Security prompt.
+   * Click **Next** on the Welcome screen.
+   * Accept the License Agreement and click **Next**.
+   * Leave the Destination Folder as default and click **Next**.
+   * Click **Install**, wait for the green bar, then click **Finish**.
+   * *(Note: Once finished, you can safely delete the .msi file from your computer!)*
+3. **Why is this required?** Vagrant cannot talk to VMware Workstation directly. This utility acts as a "translator bridge" between the two programs. Because it controls VMware at a deep system level, it installs a background Windows Service and generates security certificates, which is why it requires your manual Administrator approval to install!
+
+**Step B: Install the Vagrant Plugin**
+Open PowerShell as an Administrator and install the plugin by running:
+```powershell
+vagrant plugin install vagrant-vmware-desktop
+```
+
+### 2. Boot the VMs
+Make sure you have run `vagrant up` with the 7-node Vagrantfile and that all 7 machines are running. You will need to open multiple terminal windows to SSH into the different machines simultaneously.
 
 ## Phase 1: Setup the Load Balancers (HAProxy + Keepalived)
 
