@@ -4,3 +4,7 @@ Windows Registry Editor Version 5.00
 "Core"="VMware Workstation"
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\VMware, Inc.\VMware Workstation]
+"ProductCode"="{86B6E794-CF20-4939-A2B4-1CD53C370315}"
+"ProductVersion"="26.0.0.25388281"
+"InstallPath"="C:\\Program Files\\VMware\\VMware Workstation\\"
+"InstallPath64"="C:\\Program Files\\VMware\\VMware Workstation\\x64\\"

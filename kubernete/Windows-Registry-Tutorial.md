@@ -31,6 +31,9 @@ Windows Registry Editor Version 5.00
 ### 2. Working with Keys (Folders)
 In the Registry, folders are called **Keys**. They are wrapped in square brackets `[]`.
 
+**What is a Key used for?**
+The sole purpose of a Key is **organization**. Just like you create folders on your Desktop to organize your files, Windows uses Keys to keep the settings of different programs separated (so Google Chrome's settings don't mix with VMware's settings). If you uninstall a program, Windows can simply delete its Key, and all its settings are instantly wiped out.
+
 The Registry is divided into 5 "Root" Keys (like the C:\ drive of the registry):
 1. `HKEY_LOCAL_MACHINE` (HKLM) - System-wide settings for all users.
 2. `HKEY_CURRENT_USER` (HKCU) - Settings for the currently logged-in user.
@@ -52,6 +55,10 @@ Put a minus sign `-` directly inside the opening bracket.
 
 ### 3. Working with Values (Data)
 Keys are just folders. The actual settings inside them are called **Values**.
+
+**What is a Value used for?**
+While Keys are for organization, Values do the actual work of telling a program how to behave. Every Value has two parts: a **Name** (what setting is being changed) and the **Data** (what it is changed to). For example, a Value might have the Name `"DarkMode"` and the Data `00000001` (Yes) to tell an app to launch with a dark background.
+
 You define a value immediately underneath a Key path using the format: `"Value Name"="Data"`
 
 **Data Types:**
@@ -141,10 +148,28 @@ Windows Registry Editor Version 5.00
 "Core"="VMware Workstation"
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\VMware, Inc.\VMware Workstation]
+"InstallPath"="C:\\Program Files\\VMware\\VMware Workstation\\"
 ```
 
 ### Analyzing the Code using your new knowledge:
 1. `Windows Registry Editor Version 5.00`: We declared the mandatory header so Windows knows how to read it.
 2. `[HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\VMware, Inc.]`: We told Windows to go into the system-wide database (`HKLM`), enter the 32-bit subsystem (`WOW6432Node`), and create a new Key (folder) named `VMware, Inc.`.
 3. `"Core"="VMware Workstation"`: Inside that folder, we created a new String Value (because it's wrapped in quotes). We named the variable `"Core"` and set its text data to `"VMware Workstation"`.
-4. `[HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\VMware, Inc.\VMware Workstation]`: Finally, we created one more empty sub-folder named `VMware Workstation` inside the previous one, completing the footprint the Vagrant installer was looking for!
+4. `[HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\VMware, Inc.\VMware Workstation]`: Finally, we created one more sub-folder named `VMware Workstation` inside the previous one.
+5. `"InstallPath"=...`: Inside that second folder, we added a string that tells the installer exactly where on the `C:\` drive the VMware application is located. (Notice how backslashes must be doubled `\\` in a `.reg` file!).
+
+### Visualizing the Final Structure
+If you were to open the Registry Editor program (`regedit.exe`) and look at it with your own eyes, the final structure would look exactly like a folder tree:
+
+```text
+📁 HKEY_LOCAL_MACHINE
+ └── 📁 SOFTWARE
+      └── 📁 WOW6432Node
+           └── 📁 VMware, Inc.                   <-- (Key 1)
+                │
+                ├── 📄 "Core" = "VMware Workstation"  <-- (The Value inside Key 1)
+                │
+                └── 📁 VMware Workstation        <-- (Key 2, inside Key 1)
+                     │
+                     └── 📄 "InstallPath" = "C:\Program Files\..." <-- (The Value inside Key 2)
+```
