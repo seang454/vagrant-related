@@ -90,7 +90,39 @@ Windows Registry Editor Version 5.00
 
 ---
 
-## Part 4: Real-World Case Study (The Vagrant & VMware Fix)
+## Part 4: Advanced Syntax (Official Microsoft Documentation)
+
+According to official Microsoft Support documentation (KB310516), there are several advanced features you can use in `.reg` files for complex configurations:
+
+### 1. Adding Comments
+You can document your `.reg` files by adding comments. Any line that starts with a semicolon (`;`) is completely ignored by the Registry Editor.
+```text
+; This is a comment explaining what the next key does
+[HKEY_CURRENT_USER\Software\MyCustomApp]
+```
+
+### 2. Modifying the "Default" Value
+Every Registry key has a built-in value called `(Default)`. To modify this specific value, use the `@` symbol instead of a string name.
+```text
+[HKEY_CURRENT_USER\Software\MyCustomApp]
+@="This is the default string data"
+```
+
+### 3. Advanced Data Types
+While Strings and DWORDs are the most common, Microsoft supports complex hexadecimal encodings for other data types:
+
+* **Expandable Strings (`REG_EXPAND_SZ`):** Used for variables like `%SystemRoot%`. Defined using `hex(2):`.
+  ```text
+  "SystemPath"=hex(2):25,00,53,00,79,00,73,00,74,00,65,00,6d,00,52,00,6f,00,6f,00,74,00,25,00,00,00
+  ```
+* **Multi-Strings (`REG_MULTI_SZ`):** Used for lists of strings. Defined using `hex(7):`.
+  ```text
+  "AllowedUsers"=hex(7):41,00,64,00,6d,00,69,00,6e,00,00,00,47,00,75,00,65,00,73,00,74,00,00,00,00,00
+  ```
+
+---
+
+## Part 5: Real-World Case Study (The Vagrant & VMware Fix)
 
 Now that you know the general syntax, let's look at the exact script we used to fix your Vagrant and VMware Workstation issue.
 
