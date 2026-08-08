@@ -1,0 +1,9 @@
+---
+# Keepalived Virtual IP (Must be in the same subnet but NOT used by any VM)
+keepalived_vip: "192.168.127.100"
+keepalived_interface: "eth1" # Usually eth1 on Vagrant private networks
+
+# K3s Configuration
+k3s_token: "super-secret-cluster-token"
+k3s_version: "v1.28.4+k3s2" # Change as needed
+k3s_api_server_endpoint: "https://{{ keepalived_vip }}:6443"

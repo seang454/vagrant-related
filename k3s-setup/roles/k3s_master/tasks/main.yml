@@ -1,0 +1,30 @@
+---
+- name: Download K3s install script
+  get_url:
+    url: https://get.k3s.io
+    dest: /tmp/k3s.sh
+    mode: '0755'
+
+- name: Install First Master (Cluster Init)
+  shell: |
+    INSTALL_K3S_VERSION="{{ k3s_version }}" K3S_TOKEN="{{ k3s_token }}" /tmp/k3s.sh server \
+      --cluster-init \
+      --tls-san {{ keepalived_vip }} \
+      --node-ip {{ ansible_host }}
+  when: inventory_hostname == groups['masters'][0]
+
+- name: Wait for First Master to be ready
+  wait_for:
+    host: "{{ hostvars[groups['masters'][0]]['ansible_host'] }}"
+    port: 6443
+    delay: 10
+    timeout: 300
+  when: inventory_hostname != groups['masters'][0]
+
+- name: Install Remaining Masters
+  shell: |
+    INSTALL_K3S_VERSION="{{ k3s_version }}" K3S_TOKEN="{{ k3s_token }}" /tmp/k3s.sh server \
+      --server https://{{ hostvars[groups['masters'][0]]['ansible_host'] }}:6443 \
+      --tls-san {{ keepalived_vip }} \
+      --node-ip {{ ansible_host }}
+  when: inventory_hostname != groups['masters'][0]

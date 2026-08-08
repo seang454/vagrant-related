@@ -1,0 +1,6 @@
+---
+- name: Configure HAProxy and Keepalived Load Balancers
+  hosts: loadbalancers
+  become: yes
+  roles:
+    - haproxy_keepalived
