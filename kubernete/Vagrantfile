@@ -4,9 +4,28 @@
 Vagrant.configure("2") do |config|
   
   # ==========================================
+  # GLOBAL PERFORMANCE OPTIMIZATIONS
+  # ==========================================
+  # Disable default shared folder (Saves massive host CPU/RAM and prevents VMware bugs)
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  
+  # Disable update checks (Speeds up vagrant up)
+  config.vm.box_check_update = false
+  
+  # Prevent Vagrant from breaking Ubuntu 22.04 network card names
+  config.vm.provider :vmware_desktop do |vmware|
+    vmware.vmx["ethernet0.pcislotnumber"] = "160"
+    vmware.vmx["ethernet1.pcislotnumber"] = "224"
+  end
+
+  # ==========================================
   # 1. THE LOAD BALANCERS (HAProxy + Keepalived)
   # ==========================================
-  lb_ips = ["192.168.56.9", "192.168.56.15"]
+  # Change 'false' to 'true' to enable Load Balancers!
+  if true
+  # We use the 192.168.127.X range because it matches VMware's default 'vmnet1' Host-Only network.
+  # This prevents Vagrant from crashing when it tries to create a new network adapter.
+  lb_ips = ["192.168.127.9", "192.168.127.15"]
   
   (1..2).each do |i|
     config.vm.define "loadbalancer-#{i}" do |node|
@@ -15,13 +34,14 @@ Vagrant.configure("2") do |config|
       node.vm.network "private_network", ip: lb_ips[i-1]
       
       node.vm.provider "vmware_desktop" do |vmw|
-        vmw.gui = false 
-        # Load balancers are extremely lightweight. 512MB is plenty!
-        vmw.vmx["memsize"]  = "512" 
+        vmw.gui = true 
+        # Ubuntu 22.04 requires at least 1GB of RAM to boot!
+        vmw.vmx["memsize"]  = "1024" 
         vmw.vmx["numvcpus"] = "1"
       end
     end
   end
+  end # End of Load Balancer IF block
 
   # ==========================================
   # 2. THE KUBERNETES MASTER NODES
@@ -31,12 +51,14 @@ Vagrant.configure("2") do |config|
     config.vm.define "master-#{i}" do |node|
       node.vm.box = "bento/ubuntu-22.04"
       node.vm.hostname = "master-#{i}"
-      node.vm.network "private_network", ip: "192.168.56.#{9 + i}"
+      # Use VMware's default vmnet1 subnet to bypass the network creation bug
+      node.vm.network "private_network", ip: "192.168.127.#{9 + i}"
       
       node.vm.provider "vmware_desktop" do |vmw|
-        vmw.gui = false 
-        vmw.vmx["memsize"]  = "2048" # 2GB RAM (Strict minimum for kubeadm)
-        vmw.vmx["numvcpus"] = "2"    # 2 CPUs (Strict minimum for kubeadm)
+        vmw.gui = true 
+        # K3s is extremely lightweight! We can safely drop this to 1GB RAM and 1 CPU!
+        vmw.vmx["memsize"]  = "1536" 
+        vmw.vmx["numvcpus"] = "1"    
       end
       
       # Prepare OS for Kubernetes
@@ -44,6 +66,11 @@ Vagrant.configure("2") do |config|
         apt-get update && apt-get upgrade -y
         swapoff -a
         sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+        
+        # Aggressive Disk Cleanup (Saves ~300MB+ per node)
+        apt-get clean
+        rm -rf /var/lib/apt/lists/*
+        journalctl --vacuum-time=1d
       SHELL
     end
   end
@@ -51,14 +78,16 @@ Vagrant.configure("2") do |config|
   # ==========================================
   # 3. THE KUBERNETES WORKER NODES
   # ==========================================
+  # Change 'false' to 'true' to enable Worker Nodes!
+  if false
   # Workers do not have strict minimums to join the cluster, 
   # but they need enough resources to run your actual apps.
   (1..2).each do |i|
     config.vm.define "worker-#{i}" do |node|
       node.vm.box = "bento/ubuntu-22.04"
       node.vm.hostname = "worker-#{i}"
-      # IPs: 192.168.56.20 and 192.168.56.21
-      node.vm.network "private_network", ip: "192.168.56.#{19 + i}"
+      # IPs: 192.168.127.20 and 192.168.127.21 (Matches VMware's default vmnet1 subnet)
+      node.vm.network "private_network", ip: "192.168.127.#{19 + i}"
       
       node.vm.provider "vmware_desktop" do |vmw|
         vmw.gui = false 
@@ -71,8 +100,14 @@ Vagrant.configure("2") do |config|
         apt-get update && apt-get upgrade -y
         swapoff -a
         sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+        
+        # Aggressive Disk Cleanup (Saves ~300MB+ per node)
+        apt-get clean
+        rm -rf /var/lib/apt/lists/*
+        journalctl --vacuum-time=1d
       SHELL
     end
   end
+  end # End of Worker IF block
   
 end

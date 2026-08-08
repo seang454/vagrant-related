@@ -1,0 +1,4 @@
+# Ignore Vagrant local machine state and SSH private keys
+.vagrant/
+**/.vagrant/
+*.log
