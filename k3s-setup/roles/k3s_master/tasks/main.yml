@@ -10,7 +10,8 @@
     INSTALL_K3S_VERSION="{{ k3s_version }}" K3S_TOKEN="{{ k3s_token }}" /tmp/k3s.sh server \
       --cluster-init \
       --tls-san {{ keepalived_vip }} \
-      --node-ip {{ ansible_host }}
+      --node-ip {{ ansible_host }} \
+      --resolv-conf /run/systemd/resolve/resolv.conf
   when: inventory_hostname == groups['masters'][0]
 
 - name: Wait for First Master to be ready
@@ -26,5 +27,6 @@
     INSTALL_K3S_VERSION="{{ k3s_version }}" K3S_TOKEN="{{ k3s_token }}" /tmp/k3s.sh server \
       --server https://{{ hostvars[groups['masters'][0]]['ansible_host'] }}:6443 \
       --tls-san {{ keepalived_vip }} \
-      --node-ip {{ ansible_host }}
+      --node-ip {{ ansible_host }} \
+      --resolv-conf /run/systemd/resolve/resolv.conf
   when: inventory_hostname != groups['masters'][0]

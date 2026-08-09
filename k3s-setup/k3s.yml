@@ -1,0 +1,37 @@
+---
+- name: Configure K3s Master Nodes
+  hosts: masters
+  become: yes
+  roles:
+    - k3s_master
+
+- name: Configure K3s Worker Nodes
+  hosts: workers
+  become: yes
+  gather_facts: no
+  pre_tasks:
+    - name: Check if worker node is accessible (silently)
+      delegate_to: localhost
+      become: no
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        state: started
+        timeout: 3
+      register: host_reachable
+      failed_when: false
+      changed_when: false
+
+    - name: Display message if worker is unreachable
+      ansible.builtin.debug:
+        msg: "Worker node {{ inventory_hostname }} is unreachable. It might not be created or booted yet. Skipping..."
+      when: host_reachable.msg is defined and 'Timeout' in host_reachable.msg
+
+    - name: End host execution if unreachable
+      ansible.builtin.meta: end_host
+      when: host_reachable.msg is defined and 'Timeout' in host_reachable.msg
+
+    - name: Gather facts for reachable workers
+      ansible.builtin.setup:
+  roles:
+    - k3s_worker

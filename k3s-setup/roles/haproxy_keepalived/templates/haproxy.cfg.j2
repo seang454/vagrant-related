@@ -29,4 +29,4 @@ backend k3s-api-servers
     option tcp-check
 {% for host in groups['masters'] %}
     server {{ host }} {{ hostvars[host]['ansible_host'] }}:6443 check
-{% end endfor %}
+{% endfor %}
