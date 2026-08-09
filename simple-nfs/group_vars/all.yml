@@ -1,0 +1,23 @@
+---
+# ==========================================
+# SIMPLE NFS - CENTRALIZED VARIABLES
+# ==========================================
+
+# 🟡 The IP of the NFS server. Must match the server in [nfs_server] group.
+nfs_server_ip: "192.168.127.9"
+
+# 🟢 The directory on the NFS server that will be shared.
+nfs_export_path: "/opt/nfs/data"
+
+# 🟢 The directory on NFS clients where the share will be mounted.
+nfs_mount_point: "/opt/nfs/data"
+
+# 🟢 NFS export options.
+#    rw             = read/write access
+#    sync           = write data to disk before replying (safer)
+#    no_subtree_check = don't verify the file is in the exported directory tree (faster)
+#    no_root_squash = allow root on clients to act as root on server
+nfs_export_options: "rw,sync,no_subtree_check,no_root_squash"
+
+# 🟢 Who is allowed to connect. Use "*" for all IPs.
+nfs_allowed_clients: "*"

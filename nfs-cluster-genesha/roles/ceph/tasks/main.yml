@@ -1,0 +1,199 @@
+---
+# tasks file for ceph
+
+# ========== STEP 1: Install dependencies on ALL nodes ==========
+- name: Install ceph dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - python3
+      - lvm2
+      - docker.io
+    state: present
+    update_cache: yes
+
+# ========== STEP 2: Enable and start Docker on ALL nodes ==========
+- name: Start and enable docker
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: yes
+
+# ========== STEP 3: Download cephadm binary on ALL nodes ==========
+- name: Download cephadm binary
+  ansible.builtin.get_url:
+    url: "https://raw.githubusercontent.com/ceph/ceph/{{ ceph_release | default('quincy') }}/src/cephadm/cephadm"
+    dest: /usr/sbin/cephadm
+    mode: '0755'
+    owner: root
+    group: root
+
+# ========== STEP 4: Add Ceph repo on ALL nodes ==========
+- name: Add Ceph repo
+  ansible.builtin.command: /usr/sbin/cephadm add-repo --release {{ ceph_release | default('quincy') }}
+  args:
+    creates: /etc/apt/sources.list.d/ceph.list
+
+# ========== STEP 5: Install ceph-common on ALL nodes ==========
+- name: Install ceph-common
+  ansible.builtin.apt:
+    name: ceph-common
+    state: present
+    update_cache: yes
+
+# ========== STEP 6: Bootstrap Ceph cluster on FIRST NODE ONLY ==========
+- name: Bootstrap Ceph cluster
+  ansible.builtin.command: "cephadm bootstrap --mon-ip {{ ansible_host }} --initial-dashboard-enabled=false --skip-monitoring-stack"
+  args:
+    creates: /etc/ceph/ceph.conf
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+# ========== STEP 7: Copy /etc/ceph/ceph.conf from first node to other nodes ==========
+- name: Slurp ceph.conf from first node
+  ansible.builtin.slurp:
+    src: /etc/ceph/ceph.conf
+  register: slurp_ceph_conf
+  when: inventory_hostname == groups['ceph_nodes'][0]
+  delegate_to: "{{ groups['ceph_nodes'][0] }}"
+  run_once: true
+
+- name: Distribute ceph.conf to other nodes
+  ansible.builtin.copy:
+    content: "{{ hostvars[groups['ceph_nodes'][0]]['slurp_ceph_conf']['content'] | b64decode }}"
+    dest: /etc/ceph/ceph.conf
+    owner: root
+    group: root
+    mode: '0644'
+  when: inventory_hostname != groups['ceph_nodes'][0]
+
+# ========== STEP 8: Copy /etc/ceph/ceph.client.admin.keyring from first node to other nodes ==========
+- name: Slurp ceph.client.admin.keyring from first node
+  ansible.builtin.slurp:
+    src: /etc/ceph/ceph.client.admin.keyring
+  register: slurp_ceph_keyring
+  when: inventory_hostname == groups['ceph_nodes'][0]
+  delegate_to: "{{ groups['ceph_nodes'][0] }}"
+  run_once: true
+
+- name: Distribute ceph.client.admin.keyring to other nodes
+  ansible.builtin.copy:
+    content: "{{ hostvars[groups['ceph_nodes'][0]]['slurp_ceph_keyring']['content'] | b64decode }}"
+    dest: /etc/ceph/ceph.client.admin.keyring
+    owner: root
+    group: root
+    mode: '0600'
+  when: inventory_hostname != groups['ceph_nodes'][0]
+
+# ========== STEP 9: Get Ceph SSH public key from first node and add to authorized_keys on other nodes ==========
+- name: Slurp Ceph SSH public key from first node
+  ansible.builtin.slurp:
+    src: /etc/ceph/ceph.pub
+  register: slurp_ceph_pubkey
+  when: inventory_hostname == groups['ceph_nodes'][0]
+  delegate_to: "{{ groups['ceph_nodes'][0] }}"
+  run_once: true
+
+- name: Add Ceph SSH public key to authorized_keys on other nodes
+  ansible.posix.authorized_key:
+    user: root
+    state: present
+    key: "{{ hostvars[groups['ceph_nodes'][0]]['slurp_ceph_pubkey']['content'] | b64decode }}"
+  when: 
+    - inventory_hostname != groups['ceph_nodes'][0]
+    - hostvars[groups['ceph_nodes'][0]]['slurp_ceph_pubkey'] is defined
+
+# ========== STEP 10: Add remaining hosts to Ceph cluster - FIRST NODE ONLY ==========
+- name: Check existing hosts in ceph orch
+  ansible.builtin.command: ceph orch host ls -f json
+  register: ceph_orch_host_ls
+  changed_when: false
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+- name: Add remaining hosts to Ceph cluster
+  ansible.builtin.command: "ceph orch host add {{ item }} {{ hostvars[item]['ansible_host'] }}"
+  loop: "{{ groups['ceph_nodes'][1:] }}"
+  when: 
+    - inventory_hostname == groups['ceph_nodes'][0]
+    - item not in (ceph_orch_host_ls.stdout | default('[]') | from_json | map(attribute='hostname') | list)
+
+# ========== STEP 11: Wait for hosts to appear in ceph orch ==========
+- name: Wait for hosts to appear in ceph orch
+  ansible.builtin.command: ceph orch host ls -f json
+  register: host_ls_check
+  until: host_ls_check.stdout | default('[]') | from_json | length == groups['ceph_nodes'] | length
+  retries: 10
+  delay: 10
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+# ========== STEP 12: Add OSD disks - FIRST NODE ONLY ==========
+- name: Get available devices
+  ansible.builtin.command: ceph orch device ls -f json
+  register: ceph_orch_devices
+  changed_when: false
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+- name: Add OSD disk for each node if available
+  ansible.builtin.command: "ceph orch daemon add osd {{ item.hostname }}:{{ ceph_osd_disk }}"
+  loop: "{{ (ceph_orch_devices.stdout | default('[]') | from_json) }}"
+  when: 
+    - inventory_hostname == groups['ceph_nodes'][0]
+    - item.devices is defined
+    - (item.devices | selectattr('path', 'equalto', ceph_osd_disk) | selectattr('available', 'equalto', true) | list | length) > 0
+
+# ========== STEP 13: Create CephFS pools - FIRST NODE ONLY ==========
+- name: Check existing pools
+  ansible.builtin.command: ceph osd pool ls -f json
+  register: ceph_pools
+  changed_when: false
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+- name: Create CephFS data pool
+  ansible.builtin.command: ceph osd pool create {{ ceph_pool_data }}
+  when: 
+    - inventory_hostname == groups['ceph_nodes'][0]
+    - ceph_pool_data not in (ceph_pools.stdout | default('[]') | from_json)
+
+- name: Create CephFS metadata pool
+  ansible.builtin.command: ceph osd pool create {{ ceph_pool_metadata }}
+  when: 
+    - inventory_hostname == groups['ceph_nodes'][0]
+    - ceph_pool_metadata not in (ceph_pools.stdout | default('[]') | from_json)
+
+# ========== STEP 14: Create CephFS filesystem - FIRST NODE ONLY ==========
+- name: Check existing filesystems
+  ansible.builtin.command: ceph fs ls -f json
+  register: ceph_fs_ls
+  changed_when: false
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+- name: Create CephFS filesystem
+  ansible.builtin.command: ceph fs new {{ ceph_fsname }} {{ ceph_pool_metadata }} {{ ceph_pool_data }}
+  when: 
+    - inventory_hostname == groups['ceph_nodes'][0]
+    - ceph_fsname not in (ceph_fs_ls.stdout | default('[]') | from_json | map(attribute='name') | list)
+
+# ========== STEP 15: Deploy MDS - FIRST NODE ONLY ==========
+- name: Deploy MDS
+  ansible.builtin.command: ceph orch apply mds {{ ceph_fsname }} --placement="{{ groups['ceph_nodes'] | length }}"
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+# ========== STEP 16: Wait for Ceph health ==========
+- name: Wait for Ceph health
+  ansible.builtin.command: ceph health -f json
+  register: ceph_health
+  until: (ceph_health.stdout | default('{}') | from_json).status in ['HEALTH_OK', 'HEALTH_WARN']
+  retries: 30
+  delay: 10
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+# ========== STEP 17: Display ceph status ==========
+- name: Get ceph status
+  ansible.builtin.command: ceph -s
+  register: ceph_status_out
+  changed_when: false
+  when: inventory_hostname == groups['ceph_nodes'][0]
+
+- name: Display ceph status
+  ansible.builtin.debug:
+    var: ceph_status_out.stdout_lines
+  when: inventory_hostname == groups['ceph_nodes'][0]

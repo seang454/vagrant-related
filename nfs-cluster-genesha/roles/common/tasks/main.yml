@@ -1,0 +1,59 @@
+---
+# tasks file for common role
+# Runs on ALL nodes before any other role.
+# Sets up hostname resolution, time sync, and prerequisites.
+
+# ==========================================
+# STEP 1: Configure /etc/hosts for hostname resolution
+# ==========================================
+# Without this, nodes cannot find each other by hostname.
+# For example, "ceph orch host add haproxy-2" would fail
+# because haproxy-1 doesn't know what IP haproxy-2 is.
+- name: Deploy /etc/hosts file for hostname resolution
+  template:
+    src: hosts.j2
+    dest: /etc/hosts
+    owner: root
+    group: root
+    mode: '0644'
+
+# ==========================================
+# STEP 2: Install chrony for time synchronization
+# ==========================================
+# Ceph REFUSES to form a cluster if clocks differ by more
+# than 0.05 seconds between nodes. This is critical.
+- name: Install chrony for time synchronization
+  package:
+    name: chrony
+    state: present
+
+- name: Enable and start chrony
+  systemd:
+    name: chronyd
+    state: started
+    enabled: yes
+
+# ==========================================
+# STEP 3: Disable firewall (for lab environment)
+# ==========================================
+# In production, you should keep the firewall enabled
+# and open only the required ports instead.
+- name: Disable ufw firewall (lab environment)
+  ufw:
+    state: disabled
+  when: disable_firewall | default(true)
+  failed_when: false
+
+# ==========================================
+# STEP 4: Install basic prerequisites
+# ==========================================
+- name: Install basic prerequisites
+  package:
+    name:
+      - curl
+      - wget
+      - gnupg
+      - apt-transport-https
+      - ca-certificates
+      - software-properties-common
+    state: present

@@ -1,0 +1,144 @@
+---
+- name: Install pacemaker, corosync, pcs, resource-agents
+  package:
+    name:
+      - pacemaker
+      - corosync
+      - pcs
+      - resource-agents
+    state: present
+
+- name: Open firewall ports for Corosync, PCS, and NFS
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+  loop:
+    - { port: '5404:5405', proto: 'udp' }
+    - { port: '2224', proto: 'tcp' }
+    - { port: '2049', proto: 'tcp' }
+  failed_when: false
+
+- name: Enable and start pcsd
+  systemd:
+    name: pcsd
+    state: started
+    enabled: yes
+
+- name: Set hacluster password on all nodes
+  user:
+    name: hacluster
+    password: "{{ pacemaker_hacluster_password | password_hash('sha512') }}"
+
+- name: Authenticate nodes (first node only)
+  command: pcs host auth {{ ansible_play_hosts | join(' ') }} -u hacluster -p {{ pacemaker_hacluster_password }}
+  register: auth_result
+  changed_when: "'Authorized' in auth_result.stdout"
+  failed_when: auth_result.rc != 0 and 'already authenticated' not in auth_result.stdout
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Check if cluster exists
+  command: pcs status
+  register: cluster_status
+  failed_when: false
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Create cluster (first node only)
+  command: pcs cluster setup {{ pacemaker_cluster_name }} {{ ansible_play_hosts | join(' ') }} --force
+  when: cluster_status.rc != 0
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Start cluster on all nodes (first node only)
+  command: pcs cluster start --all
+  register: start_cluster
+  changed_when: "'Starting Cluster' in start_cluster.stdout"
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Enable auto-start
+  command: pcs cluster enable --all
+  register: enable_cluster
+  changed_when: "'Enabling' in enable_cluster.stdout"
+  failed_when: false
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Disable STONITH
+  # WARNING: In production, STONITH must be enabled for proper fencing and data integrity.
+  command: pcs property set stonith-enabled=false
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Set no-quorum-policy to stop
+  command: pcs property set no-quorum-policy=stop
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Check if VIP resource exists
+  command: pcs resource status nfs_vip
+  register: check_vip
+  failed_when: false
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Create VIP resource
+  command: >
+    pcs resource create nfs_vip ocf:heartbeat:IPaddr2
+    ip={{ nfs_vip }} cidr_netmask={{ nfs_vip_cidr }} nic={{ nfs_vip_interface }}
+    op monitor interval=10s
+  when: check_vip.rc != 0
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Check if NFS resource exists
+  command: pcs resource status nfs_ganesha_svc
+  register: check_nfs
+  failed_when: false
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Create NFS resource
+  command: >
+    pcs resource create nfs_ganesha_svc systemd:nfs-ganesha
+    op monitor interval=15s timeout=30s
+    op start timeout=60s
+    op stop timeout=60s
+  when: check_nfs.rc != 0
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Set ordering constraint VIP before NFS-Ganesha
+  command: pcs constraint order start nfs_vip then start nfs_ganesha_svc
+  register: order_constraint
+  failed_when: false
+  changed_when: "'already exists' not in order_constraint.stderr"
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Set colocation constraint NFS-Ganesha with VIP
+  command: pcs constraint colocation add nfs_ganesha_svc with nfs_vip INFINITY
+  register: colocation_constraint
+  failed_when: false
+  changed_when: "'already exists' not in colocation_constraint.stderr"
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Verify pcs status
+  command: pcs status
+  register: pcs_status
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"
+
+- name: Display pcs status
+  debug:
+    var: pcs_status.stdout_lines
+  run_once: true
+  delegate_to: "{{ ansible_play_hosts[0] }}"

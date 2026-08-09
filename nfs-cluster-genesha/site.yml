@@ -1,0 +1,45 @@
+---
+# ==========================================
+# PLAY 1: Common setup for ALL nodes
+# ==========================================
+- name: Common setup (hosts file, time sync, prerequisites)
+  hosts: all
+  become: yes
+  roles:
+    - common
+
+# ==========================================
+# PLAY 2: Deploy Ceph on storage nodes
+# ==========================================
+- name: Deploy HA Ceph Storage Cluster
+  hosts: ceph_nodes
+  become: yes
+  roles:
+    - ceph
+
+# ==========================================
+# PLAY 3: Deploy NFS-Ganesha on storage nodes
+# ==========================================
+- name: Deploy NFS-Ganesha Gateways
+  hosts: ceph_nodes
+  become: yes
+  roles:
+    - nfs_ganesha
+
+# ==========================================
+# PLAY 4: Configure HA with Pacemaker/Corosync
+# ==========================================
+- name: Configure Pacemaker and Corosync for HA
+  hosts: ceph_nodes
+  become: yes
+  roles:
+    - pacemaker_corosync
+
+# ==========================================
+# PLAY 5: Configure NFS clients
+# ==========================================
+- name: Configure NFS Clients on Kubernetes nodes
+  hosts: nfs_clients
+  become: yes
+  roles:
+    - nfs_client

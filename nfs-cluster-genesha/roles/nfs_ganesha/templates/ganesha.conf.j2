@@ -1,0 +1,21 @@
+EXPORT {
+    Export_Id = {{ nfs_export_id }};
+    Path = /;
+    Pseudo = {{ nfs_export_path }};
+    Access_Type = RW;
+    Squash = No_Root_Squash;
+    Protocols = 4;
+    Transports = TCP;
+
+    FSAL {
+        Name = CEPH;
+        Filesystem = "{{ ceph_fsname }}";
+        User_Id = "ganesha";
+        Secret_Access_Key = "{{ ceph_ganesha_key }}";
+    }
+
+    CLIENT {
+        Clients = {{ nfs_allowed_clients | default('*') }};
+        Access_Type = RW;
+    }
+}

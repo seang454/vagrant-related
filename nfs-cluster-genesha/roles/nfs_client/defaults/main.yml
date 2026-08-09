@@ -1,0 +1,15 @@
+---
+# Default variables for nfs_client role
+# These can be overridden in group_vars/all.yml
+
+# The NFS server address (Floating VIP)
+nfs_vip: "192.168.127.50"
+
+# The exported path on the NFS server
+nfs_export_path: "/data"
+
+# Where to mount the NFS share on this machine
+nfs_mount_point: "/mnt/nfs"
+
+# Mount options
+nfs_mount_opts: "defaults,_netdev,soft,timeo=300"

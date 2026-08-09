@@ -1,0 +1,7 @@
+---
+# Default variables for pacemaker_corosync role
+pacemaker_cluster_name: "nfs-ha-cluster"
+pacemaker_hacluster_password: "changeme_in_production"
+nfs_vip: "192.168.127.50"
+nfs_vip_cidr: "24"
+nfs_vip_interface: "eth1"

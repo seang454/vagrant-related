@@ -1,0 +1,103 @@
+---
+# ==========================================
+# CENTRALIZED VARIABLES FOR NFS CLUSTER
+# ==========================================
+# Change these values to dynamically update
+# ALL roles and configurations at once.
+#
+# ⚠️  = Changing this AFTER initial setup will BREAK the cluster
+# 🔴 = Changing this incorrectly will cause IMMEDIATE failure
+# 🟡 = Safe to change, but must match your environment
+# 🟢 = Safe to change anytime
+# ==========================================
+
+# ------------------------------------------
+# NFS Configuration
+# ------------------------------------------
+
+# 🔴 CRITICAL: Must be on the SAME subnet as your ceph_nodes!
+#    If your nodes are on 192.168.127.X, this MUST be 192.168.127.X too.
+#    Wrong subnet = clients cannot reach the NFS server at all.
+nfs_vip: "192.168.127.50"
+
+# ⚠️  DO NOT CHANGE after Kubernetes PersistentVolumes reference this path.
+#    If you change this, every PV/PVC in your cluster will lose connection
+#    to storage and all pods using NFS will crash with mount errors.
+nfs_export_path: "/data"
+
+# 🟢 Safe to change. This is just the local folder name on client machines.
+#    But if pods are already using this path, you must remount.
+nfs_mount_point: "/mnt/nfs"
+
+# 🟡 Change with caution. Bad mount options can cause:
+#    - "soft"  = NFS returns errors to apps if server is unreachable (safer)
+#    - "hard"  = NFS hangs FOREVER if server is unreachable (dangerous)
+#    - "_netdev" = Wait for network before mounting (important for boot)
+#    - "timeo=300" = Timeout in tenths of a second (30 seconds)
+nfs_mount_opts: "defaults,_netdev,soft,timeo=300"
+
+# 🟢 Safe to change. The NFS export ID number (must be unique per export).
+nfs_export_id: 1
+
+# ------------------------------------------
+# Ceph Configuration
+# ------------------------------------------
+
+# ⚠️  DO NOT CHANGE after the cluster is deployed.
+#    Ceph downloads and installs this specific version.
+#    Changing it on a running cluster will cause version mismatch
+#    and potentially corrupt your data.
+ceph_release: "quincy"
+
+# ⚠️  DO NOT CHANGE after CephFS is created.
+#    This is the filesystem name stored inside Ceph.
+#    Changing it will make Ceph think the old filesystem doesn't exist,
+#    and NFS-Ganesha will fail to connect to storage.
+ceph_fsname: "cephfs_nfs"
+
+# ⚠️  DO NOT CHANGE after CephFS is created.
+#    These pool names are permanently registered inside Ceph.
+#    Changing them creates NEW empty pools and orphans your data.
+ceph_pool_data: "cephfs_data"
+ceph_pool_metadata: "cephfs_metadata"
+
+# 🔴 CRITICAL: Must be a RAW, UNFORMATTED, EMPTY disk device.
+#    Ceph will WIPE this disk completely during OSD creation.
+#    If you point this to your OS disk (e.g., /dev/sda), you will
+#    DESTROY your operating system and lose everything.
+#    Run "lsblk" on each node to verify the correct device name.
+ceph_osd_disk: "/dev/sdb"
+
+# ------------------------------------------
+# Pacemaker / Corosync Configuration
+# ------------------------------------------
+
+# ⚠️  DO NOT CHANGE after the cluster is created.
+#    Pacemaker stores this name internally. Changing it will make
+#    Pacemaker think it's a different cluster and refuse to start.
+pacemaker_cluster_name: "nfs-ha-cluster"
+
+# 🟡 Can be changed, but must be updated on ALL nodes simultaneously.
+#    All 3 nodes MUST have the exact same password or pcs auth fails
+#    and the cluster cannot communicate.
+#    🔴 NEVER use this default in production! Use Ansible Vault to encrypt.
+pacemaker_hacluster_password: "changeme_in_production"
+
+# 🔴 CRITICAL: Must match your network subnet mask.
+#    Your nodes are on 192.168.127.0/24, so this must be "24".
+#    Wrong value = VIP cannot be reached by any machine.
+nfs_vip_cidr: "24"
+
+# 🔴 CRITICAL: Must be the correct network interface name on your VMs.
+#    Run "ip addr" on a ceph node to find the right interface.
+#    Common names: eth0, eth1, ens33, ens160, enp0s8
+#    Wrong interface = VIP is assigned to the wrong network and is unreachable.
+nfs_vip_interface: "eth1"
+
+# ------------------------------------------
+# Common / General Configuration
+# ------------------------------------------
+
+# 🟡 Set to true to disable the firewall entirely (simpler for lab).
+#    Set to false to keep firewall active and open only required ports.
+disable_firewall: true

@@ -1,0 +1,9 @@
+---
+# handlers for nfs_server role
+- name: restart nfs
+  systemd:
+    name: nfs-kernel-server
+    state: restarted
+
+- name: export nfs
+  command: exportfs -ra

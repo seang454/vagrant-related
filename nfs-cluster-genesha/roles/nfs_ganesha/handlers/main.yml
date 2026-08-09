@@ -1,0 +1,6 @@
+---
+# handlers file for nfs_ganesha
+- name: restart nfs-ganesha
+  systemd:
+    name: nfs-ganesha
+    state: restarted

@@ -1,0 +1,5 @@
+---
+nfs_export_path: "/data"
+nfs_export_id: 1
+ceph_fsname: "cephfs_nfs"
+ceph_pool_data: "cephfs_data"

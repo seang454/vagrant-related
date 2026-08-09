@@ -1,0 +1,13 @@
+# Managed by Ansible - DO NOT EDIT MANUALLY
+127.0.0.1   localhost
+127.0.1.1   {{ inventory_hostname }}
+
+# Ceph / NFS Storage Nodes
+{% for host in groups['ceph_nodes'] %}
+{{ hostvars[host]['ansible_host'] }}   {{ host }}
+{% endfor %}
+
+# Kubernetes / NFS Client Nodes
+{% for host in groups['nfs_clients'] %}
+{{ hostvars[host]['ansible_host'] }}   {{ host }}
+{% endfor %}

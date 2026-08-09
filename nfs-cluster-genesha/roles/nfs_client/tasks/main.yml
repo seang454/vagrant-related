@@ -1,0 +1,35 @@
+---
+- name: Install nfs-common
+  package:
+    name: nfs-common
+    state: present
+
+- name: Create mount point directory
+  file:
+    path: "{{ nfs_mount_point }}"
+    state: directory
+    mode: '0755'
+
+- name: Wait for the NFS VIP to be reachable
+  # This prevents the mount module from hanging indefinitely if the VIP is down or moving between nodes
+  wait_for:
+    host: "{{ nfs_vip }}"
+    port: 2049
+    timeout: 120
+
+- name: Mount NFS share and add to fstab
+  mount:
+    path: "{{ nfs_mount_point }}"
+    src: "{{ nfs_vip }}:{{ nfs_export_path }}"
+    fstype: nfs4
+    opts: "{{ nfs_mount_opts | default('defaults,_netdev') }}"
+    state: mounted
+
+- name: Verify mount with df -h
+  command: df -h {{ nfs_mount_point }}
+  register: mount_verify
+  changed_when: false
+
+- name: Display mount status
+  debug:
+    var: mount_verify.stdout_lines

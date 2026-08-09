@@ -1,0 +1,89 @@
+---
+# tasks file for nfs_ganesha
+
+# ==========================================
+# STEP 1: Install NFS-Ganesha packages
+# ==========================================
+# The Ceph repo was already added by the ceph role,
+# so the nfs-ganesha-ceph package will be found.
+- name: Install nfs-ganesha and nfs-ganesha-ceph
+  package:
+    name:
+      - nfs-ganesha
+      - nfs-ganesha-ceph
+    state: present
+
+# ==========================================
+# STEP 2: Create dedicated Ceph user for Ganesha (FIRST NODE ONLY)
+# ==========================================
+# We create a dedicated "client.ganesha" user instead of using "client.admin".
+# This limits Ganesha to only the permissions it needs (read/write to the data pool),
+# instead of giving it full admin access to destroy the entire Ceph cluster.
+- name: Create dedicated Ceph user for Ganesha
+  command: >
+    ceph auth get-or-create client.ganesha
+    mon 'allow r'
+    osd 'allow rw pool={{ ceph_pool_data }}'
+    mds 'allow *'
+    -o /etc/ceph/ceph.client.ganesha.keyring
+  args:
+    creates: /etc/ceph/ceph.client.ganesha.keyring
+  run_once: true
+  delegate_to: "{{ groups['ceph_nodes'][0] }}"
+
+# ==========================================
+# STEP 3: Distribute Ganesha keyring to all nodes
+# ==========================================
+- name: Read Ganesha keyring from first node
+  slurp:
+    src: /etc/ceph/ceph.client.ganesha.keyring
+  register: ganesha_keyring_content
+  run_once: true
+  delegate_to: "{{ groups['ceph_nodes'][0] }}"
+
+- name: Copy Ganesha keyring to all nodes
+  copy:
+    content: "{{ ganesha_keyring_content['content'] | b64decode }}"
+    dest: /etc/ceph/ceph.client.ganesha.keyring
+    owner: root
+    group: root
+    mode: '0600'
+
+# ==========================================
+# STEP 4: Get Ceph secret key for Ganesha user
+# ==========================================
+- name: Get Ceph secret key for Ganesha
+  command: ceph auth get-key client.ganesha
+  register: ganesha_key_result
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ groups['ceph_nodes'][0] }}"
+
+- name: Set Ganesha key fact for all nodes
+  set_fact:
+    ceph_ganesha_key: "{{ ganesha_key_result.stdout }}"
+
+# ==========================================
+# STEP 5: Deploy NFS-Ganesha configuration
+# ==========================================
+- name: Deploy NFS-Ganesha configuration
+  template:
+    src: ganesha.conf.j2
+    dest: /etc/ganesha/ganesha.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart nfs-ganesha
+
+# ==========================================
+# STEP 6: Disable NFS-Ganesha from systemd
+# ==========================================
+# IMPORTANT: Pacemaker will start/stop the NFS-Ganesha service.
+# If both systemd AND Pacemaker try to manage the same service,
+# they will CONFLICT — causing random restarts and service flapping.
+# We disable it here so ONLY Pacemaker controls it.
+- name: Disable NFS-Ganesha from systemd (Pacemaker will manage it)
+  systemd:
+    name: nfs-ganesha
+    state: stopped
+    enabled: no

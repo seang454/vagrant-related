@@ -1,0 +1,55 @@
+---
+# tasks file for nfs_server
+# Equivalent to running these commands on the Master Server:
+#   sudo apt update
+#   sudo apt install nfs-kernel-server -y
+#   sudo mkdir /opt/nfs/data -p
+#   sudo chown nobody:nogroup /opt/nfs/data
+#   sudo chmod 777 -R /opt/nfs/data
+#   sudo nano /etc/exports  →  /opt/nfs/data *(rw,sync,no_subtree_check,no_root_squash)
+#   sudo systemctl restart nfs-kernel-server
+
+# STEP 1: Install NFS server package
+- name: Install nfs-kernel-server
+  package:
+    name: nfs-kernel-server
+    state: present
+
+# STEP 2: Create the shared directory
+- name: Create NFS export directory
+  file:
+    path: "{{ nfs_export_path }}"
+    state: directory
+    owner: nobody
+    group: nogroup
+    mode: '0777'
+    recurse: yes
+
+# STEP 3: Configure /etc/exports (what to share and who can access)
+- name: Configure NFS exports
+  lineinfile:
+    path: /etc/exports
+    line: "{{ nfs_export_path }}    {{ nfs_allowed_clients }}({{ nfs_export_options }})"
+    regexp: "^{{ nfs_export_path }}"
+    state: present
+    create: yes
+  notify:
+    - export nfs
+    - restart nfs
+
+# STEP 4: Enable and start NFS server
+- name: Enable and start NFS server
+  systemd:
+    name: nfs-kernel-server
+    state: started
+    enabled: yes
+
+# STEP 5: Verify NFS exports
+- name: Verify NFS exports are active
+  command: exportfs -v
+  register: nfs_exports
+  changed_when: false
+
+- name: Display NFS exports
+  debug:
+    var: nfs_exports.stdout_lines

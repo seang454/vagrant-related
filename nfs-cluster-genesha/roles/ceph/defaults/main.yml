@@ -1,0 +1,7 @@
+---
+# Default variables for ceph role
+ceph_release: "quincy"
+ceph_fsname: "cephfs_nfs"
+ceph_pool_data: "cephfs_data"
+ceph_pool_metadata: "cephfs_metadata"
+ceph_osd_disk: "/dev/sdb"

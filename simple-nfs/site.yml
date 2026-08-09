@@ -1,0 +1,18 @@
+---
+# ==========================================
+# PLAY 1: Setup NFS Server
+# ==========================================
+- name: Setup NFS Server
+  hosts: nfs_server
+  become: yes
+  roles:
+    - nfs_server
+
+# ==========================================
+# PLAY 2: Setup NFS Clients
+# ==========================================
+- name: Setup NFS Clients
+  hosts: nfs_clients
+  become: yes
+  roles:
+    - nfs_client
